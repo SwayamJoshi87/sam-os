@@ -27,6 +27,8 @@ services:
     volumes:
       # api needs read-write to instantiate today's instances on first GET
       - ${SAMOS_DB_HOST_PATH:-/home/server/data}:/data:rw
+      # also mount the repo so /help can read .env + show docker commands
+      - ${SAMOS_REPO_HOST_PATH:-/home/server/sam-os}:/app/repo:ro
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -57,6 +59,7 @@ services:
       TZ: ${TZ:-America/Toronto}
     volumes:
       - ${SAMOS_DB_HOST_PATH:-/home/server/data}:/data:ro
+      - ${SAMOS_REPO_HOST_PATH:-/home/server/sam-os}:/app/repo:ro
     dns:
       - 1.1.1.1
       - 8.8.8.8
