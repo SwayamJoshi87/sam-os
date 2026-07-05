@@ -8,22 +8,23 @@
 │                                            │
 │  /home/server/data/schedule.db  ← SQLite   │
 │  /home/server/sam-os/           ← git repo │
+│       └── samos/server.py       ← MCP      │
 └────────────────┬───────────────────────────┘
-                 │ bind mount
+                 │
+                 │ Hermes launches stdio subprocess
+                 │   .venv/bin/python -m samos.server
                  ▼
 ┌────────────────────────────────────────────┐
-│  Docker                                    │
-│                                            │
-│  ┌────────────────────┐  ┌──────────────┐  │
-│  │  sam-os-api        │  │ sam-os-backup│  │
-│  │  FastAPI :8765     │  │ psycopg2     │  │
-│  │                    │  │ APScheduler  │  │
-│  │  /api/schedule     │  │ 3am daily    │  │
-│  │  /api/gym          │  │              │  │
-│  │  /api/meals        │  │              │  │
-│  │  /docs (OpenAPI)   │  │              │  │
-│  └────────────────────┘  └──────┬───────┘  │
-└──────────────────────────────────┼──────────┘
+│  Hermes / MCP client                       │
+│  Calls tools: schedule_today, gym_log,     │
+│               meal_log, detect_conflicts   │
+└────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────┐
+│  Docker (optional packaging)               │
+│  sam-os image runs the same MCP server     │
+│  with stdin/stdout attached                │
+└────────────────────────────────────────────┘
                                    │ TLS
                                    ▼
                         ┌─────────────────────┐
@@ -34,61 +35,53 @@
 
 ## Data flow
 
-1. **Reads** (telegram bot, cron, browser) hit `sam-os-api:8765` via HTTP
-2. **API** reads from bind-mounted SQLite, returns JSON
-3. **Mutations** (POST /did/gym, /api/meals/log) write to SQLite via the API
-4. **Backup container** runs at 3am, reads the same SQLite, syncs to Neon
-5. **No data in containers** — only code + ephemeral process state
+1. **Hermes** launches `python -m samos.server` as a stdio subprocess.
+2. **MCP server** exposes tools/resources and runs an internal APScheduler for cron jobs.
+3. **Reads/writes** go to the bind-mounted SQLite file.
+4. **Backup job** runs at 3am, reads the same SQLite, syncs to Neon Postgres.
+5. **No data in containers** — only code + ephemeral process state.
+
+## Why MCP instead of REST
+
+- Hermes already supports stdio MCP servers.
+- One process replaces FastAPI + CLI scripts + AI-side cron jobs.
+- Tool descriptions become the API contract, discoverable by the LLM.
+- No need to maintain OpenAPI specs or REST clients.
 
 ## Why SQLite on the host, not in a Docker volume
 
-- Container restarts never lose data (`docker rm -f` is safe)
-- `docker compose up` after a config change keeps the DB intact
-- Backup reads from the same source the API writes to (no drift)
-- Easy to inspect from the host: `sqlite3 /home/server/data/schedule.db`
-- DB permissions follow the host's standard layout (uid 1000)
+- Container restarts never lose data (`docker rm -f` is safe).
+- `docker compose up` after a config change keeps the DB intact.
+- Backup reads from the same source the server writes to (no drift).
+- Easy to inspect from the host: `sqlite3 /home/server/data/schedule.db`.
 
-The api container needs `:rw` because it writes (instantiates today's instances
-on first GET). The backup container only reads, so it could safely be `:ro`.
+## Internal scheduler
 
-## Why two services, not one
+APScheduler runs these jobs in a background thread inside the MCP server:
 
-The API is read-heavy and latency-sensitive. The backup is batch and tolerates
-restarts. Separating them means:
+| Cron | Job |
+|---|---|
+| `0 8 * * *` | Instantiate today's instances + iCloud calendar push |
+| `0 20 * * *` | Gym check |
+| `0 0 * * *` | EOD sweep (pending → skipped) |
+| `*/30 8-20 * * *` | Calendar conflict detection (logs only, never auto-moves) |
+| `0 20 * * 0` | Sunday review |
+| `0 3 * * *` | Postgres backup sync |
 
-- Backup can crashloop without taking down the API
-- API can be redeployed without losing backup history
-- Different resource limits (api: 256MB, backup: 128MB)
-- Different restart policies if you want
+## Today vs template
 
-## Why FastAPI
+- **Template** = the recurring weekly plan stored in `tasks`.
+- **Today instances** = per-day reality stored in `today_instances`.
 
-- Async (uvicorn under the hood) — handles concurrent requests cleanly
-- Auto-generated OpenAPI docs at `/docs` and `/openapi.json`
-- Pydantic models catch type errors before they hit the DB
-- Type hints make the code self-documenting
-- Stdlib sqlite3 + FastAPI = no ORM bloat, full control over SQL
+Ad-hoc changes today should only touch `today_instances`. Permanent changes should
+rewrite the template.
 
-## Why stdlib sqlite3 (not SQLAlchemy)
+## Conflict handling
 
-- The schema is small (8 tables), the queries are simple
-- We already have working CLI scripts that use raw sqlite3
-- ORM adds an abstraction layer we'd have to teach the LLM skills
-- Direct SQL keeps the mental model: "what the script does is what the API does"
-- Migrations are plain SQL files (`scripts/sql/*.sql`), applied idempotently on API startup
-
-## Why Neon Postgres (not a local PG container)
-
-- Serverless — no maintenance, no resource overhead on the homelab
-- Free tier handles 1 daily backup job fine
-- TLS by default (no firewall config)
-- Separate from the homelab — survives total local hardware failure
-- The SQLite file is still the canonical source of truth; PG is read-only backup
+The conflict detector returns conflicts **and** proposed resolutions. It never
+auto-applies a move. Hermes presents the options and the user chooses.
 
 ## Open ports
 
-| Port | Service | Bound to | Notes |
-|---|---|---|---|
-| 8765 | sam-os-api | 127.0.0.1 | localhost-only by default. Expose via reverse proxy if remote access needed. |
-
-No other ports are exposed. The backup container has no inbound ports.
+None by default. MCP stdio does not need a network port. If you choose to expose
+the server over SSE/HTTP, configure that separately.

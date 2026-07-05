@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Sunday 8pm — weekly review of living schedule."""
+
 import sys
-sys.path.insert(0, "/home/server/.hermes/scripts")
-from schedule_lib import week_history, stats
 from collections import Counter
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from samos.schedule import stats as week_stats
+from samos.schedule import week_history
 
 hist = week_history(7)
-stats_rows = stats(7)
+stats_rows = week_stats(7)
 
 print("📊 weekly review — last 7 days\n")
 if not stats_rows:
@@ -20,11 +25,12 @@ else:
         tot = r["total"]
         if not tot:
             continue
-        pct = (done / tot * 100)
+        pct = done / tot * 100
         bar = "█" * int(pct / 10) + "░" * (10 - int(pct / 10))
-        print(f"  {r['category']:<12} {bar} {done}/{tot} ({pct:.0f}%)  {skp} skipped  {mov} moved")
+        print(
+            f"  {r['category']:<12} {bar} {done}/{tot} ({pct:.0f}%)  {skp} skipped  {mov} moved"
+        )
 
-# top reasons for skipping
 skips = [r for r in hist if r["status"] == "skipped" and r["reason"]]
 reasons = Counter(r["reason"] for r in skips)
 if reasons:
@@ -32,7 +38,6 @@ if reasons:
     for reason, count in reasons.most_common(5):
         print(f"  • {reason} ({count})")
 
-# top moves
 moves = [r for r in hist if r["status"] == "moved"]
 if moves:
     print(f"\ntotal moves: {len(moves)}")

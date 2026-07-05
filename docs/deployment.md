@@ -7,9 +7,9 @@
 git clone https://github.com/SwayamJoshi87/sam-os.git /home/server/sam-os
 cd /home/server/sam-os
 
-# 2. Create venv for CLI tools (optional, for local dev)
+# 2. Create venv and install
 python3 -m venv .venv
-.venv/bin/pip install -r api/requirements.txt
+.venv/bin/pip install -r requirements.txt
 
 # 3. Configure env
 cp .env.example .env
@@ -18,34 +18,21 @@ nano .env
 # Set BACKUP_PG_DSN=postgresql://user:***@host/db?sslmode=require
 # Set TZ=America/Toronto (or your local timezone)
 
-# 4. Build + start
-docker compose -f docker/docker-compose.yml --env-file .env build
-docker compose -f docker/docker-compose.yml --env-file .env up -d
+# 4. Test the server manually
+.venv/bin/python -m samos.server
+# (send Ctrl-C after confirming it starts)
 
-# 5. Verify
-curl http://localhost:8765/health
-# {"status":"ok","db":"/data/schedule.db"}
-
-docker ps --filter "name=sam-os"
-# sam-os-api      Up (healthy)  127.0.0.1:8765->8765/tcp
-# sam-os-backup   Up
-
-docker logs sam-os-backup
-# [timestamp] starting backup from /data/schedule.db
-#   pg schema verified/applied
-#   categories: 6 rows synced
-#   ...
-#   backup complete
-#   backup scheduler running, next at 3am
+# 5. Configure Hermes to launch it
+# Copy hermes/mcp.json to your Hermes MCP config location and adjust paths.
 ```
 
 ## Host directory permissions
 
-The api container runs as uid 1000 (user `samos`). The host directory at
-`SAMOS_DB_HOST_PATH` must be writable by that uid so SQLite can create
-`-wal` and `-journal` files alongside the main DB.
+The server process needs write access to the SQLite directory so SQLite can create
+`-wal` and `-journal` files.
 
 ```bash
+mkdir -p /home/server/data
 # If the host user is uid 1000 (default on most systems), this works as-is.
 # Otherwise:
 chmod 777 /home/server/data
@@ -53,137 +40,91 @@ chmod 777 /home/server/data
 chown 1000:1000 /home/server/data
 ```
 
-Verify from inside the container:
+## Hermes MCP config
 
-```bash
-docker exec sam-os-api touch /data/.test && echo "write works" || echo "PERMISSION DENIED"
-docker exec sam-os-api rm /data/.test
-```
+Use `hermes/mcp.json` as a starting point. Key fields:
+
+- `command` — path to the venv Python.
+- `args` — `[-u, -m, samos.server]`.
+- `env` — `SAMOS_DB_PATH`, `TZ`, `PYTHONIOENCODING`, `HERMES_HOME`.
+
+Restart Hermes after updating the config.
 
 ## Updating
 
 ```bash
 cd /home/server/sam-os
 git pull
-docker compose -f docker/docker-compose.yml --env-file .env build
-docker compose -f docker/docker-compose.yml --env-file .env up -d
+.venv/bin/pip install -r requirements.txt
+# Restart the sam-os MCP server from Hermes
 ```
 
-DB is bind-mounted, so updates never lose data. New SQL migrations in
-`scripts/sql/*.sql` are applied automatically on the next API startup.
+DB is on the host, so updates never lose data. New SQL migrations in
+`scripts/sql/*.sql` are applied automatically on the next server startup.
 
 ## Verification
 
 ```bash
-# API health
-curl -s http://localhost:8765/health
-# {"status":"ok","db":"/data/schedule.db"}
+# Check the server speaks MCP
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | .venv/bin/python -m samos.server
 
-# Endpoint count
-curl -s http://localhost:8765/openapi.json | python3 -c \
-  "import json,sys; d=json.load(sys.stdin); print(f'{len(d[\"paths\"])} endpoints registered')"
-
-# Backup recent run
-docker logs sam-os-backup 2>&1 | tail -20
-
-# Manual backup trigger
-docker restart sam-os-backup
-sleep 8
-docker logs sam-os-backup 2>&1 | tail -15
-
-# Verify backup landed in PG
-docker run --rm -e PGPASSWORD='***' postgres:16-alpine \
-  psql "host=YOUR_HOST user=YOUR_USER dbname=YOUR_DB sslmode=require" \
-  -c "SELECT COUNT(*) FROM workouts;"
+# List tools via the CLI helper (or call tools/call over stdio)
+.venv/bin/python scripts/schedule.py today
+.venv/bin/python scripts/workout.py prs
+.venv/bin/python scripts/meal_log.py today
 ```
+
+## Docker
+
+Build:
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env build
+```
+
+Run interactively for stdio:
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os
+```
+
+Because MCP stdio requires an attached stdin/stdout pipe, `docker compose up -d` is
+not the right command for stdio mode. Use `docker compose run --rm` or run the
+server directly from the venv.
+
+## Disabling the backup
+
+If you want to run without the Postgres backup:
+
+- Leave `BACKUP_PG_DSN` empty in `.env`, or
+- Set `SAMOS_CALENDAR_OFFLINE=1` to skip iCloud CalDAV reads/writes.
 
 ## Restoring from a postgres backup
 
 The SQLite file is the canonical source. The PG backup is read-only. To restore
-from PG to a fresh SQLite (cross-dialect, non-trivial):
-
-1. Export the relevant tables from PG:
-   ```bash
-   docker run --rm -e PGPASSWORD='***' postgres:16-alpine \
-     pg_dump "host=YOUR_HOST user=YOUR_USER dbname=YOUR_DB sslmode=require" \
-     --data-only --no-owner --no-privileges \
-     -t tasks -t today_instances -t workouts -t prs -t meals -t daily_targets \
-     > /tmp/samos_restore.sql
-   ```
-
-2. Convert syntax to SQLite (manual transform — see tools like `pg2sqlite` or
-   do it by hand for the small set of types involved)
-
-3. Apply to a fresh SQLite file:
-   ```bash
-   sqlite3 /home/server/data/schedule.db < scripts/sql/001_today_instances.sql
-   sqlite3 /home/server/data/schedule.db < scripts/sql/002_nutrition.sql
-   sqlite3 /home/server/data/schedule.db < /tmp/samos_restored.sql
-   ```
-
-4. Restart the API to pick up the changes:
-   ```bash
-   docker compose -f docker/docker-compose.yml --env-file .env restart api
-   ```
-
-In practice, you almost never need to restore from PG. The host SQLite is
-the source of truth and is itself backed up via your usual host backup
-strategy (whatever you use for `/home/server/data`).
-
-## Disabling the backup
-
-If you want to run the API without the backup container:
-
-```bash
-docker compose -f docker/docker-compose.yml --env-file .env up -d api
-# or to stop just the backup:
-docker compose -f docker/docker-compose.yml --env-file .env stop backup
-```
-
-## Exposing the API remotely
-
-Default is `127.0.0.1:8765` (localhost-only). To expose:
-
-- **LAN only** — change `docker-compose.yml` to `"0.0.0.0:8765:8765"`
-- **Public** — put behind a reverse proxy (nginx, caddy) with TLS. See the
-  self-hosted-services skill for the local-https recipe.
-
-When exposing, set `SAMOS_API_KEY` in `.env` and add an auth middleware to
-`api/main.py` that checks `Authorization: Bearer *** KEY` (deferred — not in v1.0).
+from PG to a fresh SQLite, follow the same steps as before: export from PG,
+convert syntax to SQLite, and apply.
 
 ## Troubleshooting
 
 ### `unable to open database file`
 
-The api user can't write to the host directory. Fix:
+The server process can't write to the host directory. Fix:
+
 ```bash
 chmod 777 /home/server/data
 ```
 
-### Backup hangs / never logs
+### Hermes cannot connect
 
-`docker logs sam-os-backup` is empty. Check that the python process is unbuffered
-(Dockerfile already has `-u` flag). If you customized the Dockerfile and removed
-`-u`, restore it.
+- Verify the `command` path in the MCP config points to the venv Python.
+- Check that `SAMOS_DB_PATH` is set and the directory is writable.
+- Run the server manually and confirm it responds to the initialize message.
 
-### PG connection fails with "password authentication failed"
+### Migrations fail on startup
 
-The `.env` file has the wrong password, or the `BACKUP_PG_DSN` got corrupted.
-Check with:
+Check the latest file in `scripts/sql/`. The error is printed to stderr:
+
 ```bash
-grep BACKUP_PG_DSN /home/server/sam-os/.env
+.venv/bin/python -m samos.server 2>&1 | tail -20
 ```
-
-### Migrations fail on API startup
-
-Check the latest file in `scripts/sql/`. The error is in the API logs:
-```bash
-docker logs sam-os-api 2>&1 | tail -20
-```
-
-### Backup overwrites good data with bad data
-
-The backup is one-way (sqlite → pg). It uses upserts, so any old data in PG
-for a given `id` gets overwritten. If you accidentally back up a corrupted
-SQLite, the PG copy gets corrupted too. Solution: use the PG snapshot
-recovery (Neon dashboard → "Restore to point in time") to roll back.

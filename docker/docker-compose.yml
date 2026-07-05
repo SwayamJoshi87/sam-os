@@ -1,68 +1,35 @@
-# sam-os: personal OS stack
+# sam-os: personal OS MCP server
 #
-# Usage:
-#   docker compose -f docker/docker-compose.yml --env-file .env build
-#   docker compose -f docker/docker-compose.yml --env-file .env up -d
+# This compose file is mainly for building the image and running the server
+# in attached stdio mode. Because MCP stdio expects a persistent stdin/stdout
+# pipe, Hermes normally launches the server directly:
 #
-# Services:
-#   api     — FastAPI on port 8765 (localhost-only by default)
-#   backup  — daily sqlite → postgres sync (3am local time)
+#   /home/server/sam-os/.venv/bin/python -m samos.server
 #
-# Data: SQLite is bind-mounted from the host. Container restarts don't lose
-# data. See ../README.md and ../docs/deployment.md for the full pattern.
+# For containerized stdio, run interactively:
+#
+#   docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os
+#
+# Or with plain docker:
+#
+#   docker run -i --rm --env-file .env -v ${SAMOS_DB_HOST_PATH}:/data sam-os
 
 services:
-  api:
+  sam-os:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.api
-    image: sam-os-api:dev
-    container_name: sam-os-api
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8765:8765"  # localhost-only by default
+      dockerfile: docker/Dockerfile
+    image: sam-os:dev
+    container_name: sam-os
+    stdin_open: true
+    tty: true
     environment:
       SAMOS_DB_PATH: /data/schedule.db
       TZ: ${TZ:-America/Toronto}
+      PYTHONIOENCODING: utf-8
     volumes:
-      # api needs read-write to instantiate today's instances on first GET
       - ${SAMOS_DB_HOST_PATH:-/home/server/data}:/data:rw
-      # also mount the repo so /help can read .env + show docker commands
-      - ${SAMOS_REPO_HOST_PATH:-/home/server/sam-os}:/app/repo:ro
     dns:
       - 1.1.1.1
       - 8.8.8.8
     mem_limit: 256m
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health').read()"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  backup:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.backup
-    image: sam-os-backup:dev
-    container_name: sam-os-backup
-    restart: unless-stopped
-    environment:
-      SAMOS_DB_PATH: /data/schedule.db
-      BACKUP_PG_DSN: ${BACKUP_PG_DSN:-}
-      BACKUP_PG_HOST: ${BACKUP_PG_HOST:-}
-      BACKUP_PG_PORT: ${BACKUP_PG_PORT:-5432}
-      BACKUP_PG_DB: ${BACKUP_PG_DB:-}
-      BACKUP_PG_USER: ${BACKUP_PG_USER:-}
-      BACKUP_PG_PASSWORD: ${BACKUP_PG_PASSWORD:-}
-      BACKUP_PG_SSLMODE: ${BACKUP_PG_SSLMODE:-require}
-      TZ: ${TZ:-America/Toronto}
-    volumes:
-      - ${SAMOS_DB_HOST_PATH:-/home/server/data}:/data:ro
-      - ${SAMOS_REPO_HOST_PATH:-/home/server/sam-os}:/app/repo:ro
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    mem_limit: 128m
-    depends_on:
-      - api

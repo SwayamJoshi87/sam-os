@@ -60,7 +60,14 @@ GROUP BY m.date, t.calories;
 
 ## Schema versioning
 
-Migrations are versioned by filename: `001_today_instances.sql`, `002_nutrition.sql`.
+Migrations are versioned by filename: `000_base.sql`, `001_today_instances.sql`, `002_nutrition.sql`, `004_gym.sql`.
+
+- `000_base.sql` — categories, tasks, today_instances, schedule_log.
+- `001_today_instances.sql` — idempotent re-declaration of today_instances (legacy compatibility).
+- `002_nutrition.sql` — meals and daily_targets.
+- `004_gym.sql` — workouts and prs.
+
+Tasks with `day_of_week = -1` are ad-hoc backing tasks for `schedule_add_today`. They do not appear in the weekly template.
 The `init_db()` function applies all of them in order. New migrations should be
 added as `00N_*.sql` with N being the next integer.
 

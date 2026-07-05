@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "sam-os": {
+      "command": "/home/server/sam-os/.venv/bin/python",
+      "args": ["-u", "-m", "samos.server"],
+      "env": {
+        "SAMOS_DB_PATH": "/home/server/data/schedule.db",
+        "TZ": "America/Toronto",
+        "PYTHONIOENCODING": "utf-8",
+        "SAMOS_CALENDAR_OFFLINE": "0",
+        "HERMES_HOME": "/home/server/.hermes"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
