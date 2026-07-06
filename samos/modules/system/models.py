@@ -42,6 +42,12 @@ SYNC_TABLES = [
     "relationships",
     "observations",
     "events",
+    "todos",
+    "notes",
+    "journal",
+    "memories",
+    "projects",
+    "user_profile",
 ]
 
 

@@ -225,3 +225,60 @@ CREATE INDEX IF NOT EXISTS idx_pg_relationships_source ON relationships(source_i
 CREATE INDEX IF NOT EXISTS idx_pg_relationships_target ON relationships(target_id);
 CREATE INDEX IF NOT EXISTS idx_pg_observations_entity ON observations(entity_id);
 CREATE INDEX IF NOT EXISTS idx_pg_events_module ON events(module);
+
+CREATE TABLE IF NOT EXISTS todos (
+    id          INTEGER PRIMARY KEY,
+    text        TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    priority    INTEGER,
+    due_date    TEXT,
+    project_id  INTEGER,
+    tags        TEXT,
+    created_at  TEXT NOT NULL,
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS notes (
+    id          INTEGER PRIMARY KEY,
+    title       TEXT,
+    body        TEXT NOT NULL,
+    tags        TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS journal (
+    id          INTEGER PRIMARY KEY,
+    date        TEXT NOT NULL UNIQUE,
+    mood        INTEGER,
+    entry       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memories (
+    id          INTEGER PRIMARY KEY,
+    category    TEXT NOT NULL,
+    fact        TEXT NOT NULL,
+    confidence  INTEGER,
+    source      TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT,
+    status      TEXT NOT NULL,
+    notes       TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_profile (
+    id          INTEGER PRIMARY KEY,
+    key         TEXT NOT NULL UNIQUE,
+    value       TEXT,
+    updated_at  TEXT NOT NULL
+);
