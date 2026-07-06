@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 from .db import DB_PATH, get_conn
@@ -11,6 +12,13 @@ from .db import DB_PATH, get_conn
 REPO_ROOT = Path(__file__).parent.parent.resolve()
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 ENV_PATH = HERMES_HOME / ".env"
+DOCKER_COMPOSE = REPO_ROOT / "docker" / "docker-compose.yml"
+ENV_EXAMPLE = REPO_ROOT / ".env.example"
+
+
+def _docker_available() -> bool:
+    """Return True if docker appears usable on this host."""
+    return shutil.which("docker") is not None
 
 
 def _venv_python() -> Path | None:
@@ -55,11 +63,15 @@ def _ensure_db_schema():
         pass
 
 
-def setup_check() -> dict:
+def setup_check(use_docker: bool = False) -> dict:
     """Verify prerequisites for running sam-os. Safe to call before full setup."""
     _ensure_db_schema()
     checks = {
         "repo_root": str(REPO_ROOT),
+        "deployment": "docker" if use_docker else "venv",
+        "docker_available": _docker_available(),
+        "docker_compose_present": DOCKER_COMPOSE.exists(),
+        "env_example_present": ENV_EXAMPLE.exists(),
         "venv_present": False,
         "venv_python": None,
         "deps_importable": False,
@@ -123,12 +135,20 @@ def setup_check() -> dict:
     except Exception as e:
         checks["issues"].append(f"Could not read template state: {e}")
 
-    checks["ready_to_run"] = (
-        checks["venv_present"]
-        and checks["deps_importable"]
-        and checks["db_dir_writable"]
-        and (checks["calendar_offline"] or checks["icloud_app_password_present"])
-    )
+    if use_docker:
+        checks["ready_to_run"] = (
+            checks["docker_available"]
+            and checks["docker_compose_present"]
+            and checks["db_dir_writable"]
+            and (checks["calendar_offline"] or checks["icloud_app_password_present"])
+        )
+    else:
+        checks["ready_to_run"] = (
+            checks["venv_present"]
+            and checks["deps_importable"]
+            and checks["db_dir_writable"]
+            and (checks["calendar_offline"] or checks["icloud_app_password_present"])
+        )
 
     return checks
 
@@ -138,16 +158,12 @@ def write_hermes_config(
     db_path: str | None = None,
     tz: str | None = None,
     calendar_offline: bool | None = None,
+    use_docker: bool = False,
 ) -> dict:
     """Generate a Hermes mcp.json config for this installation."""
-    venv_python = _venv_python()
-    if not venv_python:
-        raise RuntimeError("no virtualenv found; create .venv first")
-
     target = Path(output_path) if output_path else _hermes_config_path()
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    db = db_path or str(DB_PATH)
     tz_value = tz or os.environ.get("TZ", "America/Toronto")
     offline = (
         "1"
@@ -155,23 +171,53 @@ def write_hermes_config(
         else "0"
     )
 
-    config = {
-        "mcpServers": {
-            "sam-os": {
-                "command": str(venv_python),
-                "args": ["-u", "-m", "samos.server"],
-                "env": {
-                    "SAMOS_DB_PATH": db,
-                    "TZ": tz_value,
-                    "PYTHONIOENCODING": "utf-8",
-                    "SAMOS_CALENDAR_OFFLINE": offline,
-                },
+    if use_docker:
+        compose_file = str(DOCKER_COMPOSE)
+        env_file = str(REPO_ROOT / ".env")
+        config = {
+            "mcpServers": {
+                "sam-os": {
+                    "command": "docker",
+                    "args": [
+                        "compose",
+                        "-f",
+                        compose_file,
+                        "--env-file",
+                        env_file,
+                        "run",
+                        "--rm",
+                        "sam-os",
+                    ],
+                    "env": {
+                        "TZ": tz_value,
+                        "SAMOS_CALENDAR_OFFLINE": offline,
+                    },
+                }
             }
         }
-    }
+    else:
+        venv_python = _venv_python()
+        if not venv_python:
+            raise RuntimeError("no virtualenv found; create .venv first")
+
+        db = db_path or str(DB_PATH)
+        config = {
+            "mcpServers": {
+                "sam-os": {
+                    "command": str(venv_python),
+                    "args": ["-u", "-m", "samos.server"],
+                    "env": {
+                        "SAMOS_DB_PATH": db,
+                        "TZ": tz_value,
+                        "PYTHONIOENCODING": "utf-8",
+                        "SAMOS_CALENDAR_OFFLINE": offline,
+                    },
+                }
+            }
+        }
 
     target.write_text(json.dumps(config, indent=2) + "\n")
-    return {"written_to": str(target), "config": config}
+    return {"written_to": str(target), "config": config, "deployment": "docker" if use_docker else "venv"}
 
 
 def seed_template() -> dict:
@@ -295,17 +341,20 @@ def run_setup(
     write_hermes: bool = True,
     seed_template_flag: bool = True,
     calendar_offline: bool = False,
+    use_docker: bool = False,
 ) -> dict:
-    """One-shot setup routine: write config, seed template, verify calendar."""
+    """One-shot setup routine: check, write config, seed template, verify calendar."""
     results = {
-        "check": setup_check(),
+        "check": setup_check(use_docker=use_docker),
         "hermes_config": None,
         "template": None,
         "calendar": None,
     }
 
     if write_hermes:
-        results["hermes_config"] = write_hermes_config(calendar_offline=calendar_offline)
+        results["hermes_config"] = write_hermes_config(
+            calendar_offline=calendar_offline, use_docker=use_docker
+        )
 
     if seed_template_flag:
         results["template"] = seed_template()

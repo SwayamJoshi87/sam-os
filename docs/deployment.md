@@ -1,6 +1,42 @@
 # Deployment
 
-## First-time setup
+## First-time setup (Docker — recommended)
+
+```bash
+# 1. Clone
+git clone https://github.com/SwayamJoshi87/sam-os.git /home/server/sam-os
+cd /home/server/sam-os
+
+# 2. Configure env
+cp .env.example .env
+nano .env
+# Set SAMOS_DB_HOST_PATH=/home/server/data
+# Set BACKUP_PG_DSN=postgresql://user:***@host/db?sslmode=require (optional)
+# Set TZ=America/Toronto (or your local timezone)
+# Set SAMOS_CALENDAR_OFFLINE=1 if you are not using iCloud
+
+# 3. Build image
+docker compose -f docker/docker-compose.yml --env-file .env build
+
+# 4. Run automated setup inside the container
+#    This writes ~/.hermes/mcp.json and seeds a starter template.
+docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os \
+  python scripts/setup.py run --calendar-offline
+
+# 5. Test the server manually
+docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os
+# (send Ctrl-C after confirming it starts)
+```
+
+You can also run setup from the host if Python is available:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python scripts/setup.py run --docker --calendar-offline
+```
+
+## First-time setup (venv — alternative)
 
 ```bash
 # 1. Clone
@@ -14,11 +50,8 @@ python3 -m venv .venv
 # 3. Configure env
 cp .env.example .env
 nano .env
-# Set SAMOS_DB_HOST_PATH=/home/server/data
-# Set BACKUP_PG_DSN=postgresql://user:***@host/db?sslmode=require (optional)
-# Set TZ=America/Toronto (or your local timezone)
 
-# 4. Run automated setup (creates Hermes config and seeds a starter template)
+# 4. Run automated setup
 .venv/bin/python scripts/setup.py run --calendar-offline
 
 # Or step by step:
@@ -50,14 +83,18 @@ chown 1000:1000 /home/server/data
 The fastest way to generate the config is:
 
 ```bash
+# Docker
+.venv/bin/python scripts/setup.py hermes --docker --calendar-offline
+
+# venv
 .venv/bin/python scripts/setup.py hermes --calendar-offline
 ```
 
-This writes `~/.hermes/mcp.json` with the correct venv path, DB path, and timezone.
-You can also call `setup_write_hermes_config(...)` over MCP.
+This writes `~/.hermes/mcp.json` with the correct launch command and environment.
+You can also call `setup_write_hermes_config(use_docker=true)` over MCP.
 
 If you prefer to write it by hand, use `hermes/mcp.json` as a starting point.
-Key fields:
+Key fields for venv mode:
 
 - `command` — path to the venv Python.
 - `args` — `[-u, -m, samos.server]`.
@@ -71,6 +108,8 @@ Restart Hermes after updating the config.
 cd /home/server/sam-os
 git pull
 .venv/bin/pip install -r requirements.txt
+# Rebuild image if using Docker
+docker compose -f docker/docker-compose.yml --env-file .env build
 # Restart the sam-os MCP server from Hermes
 ```
 
@@ -81,18 +120,18 @@ DB is on the host, so updates never lose data. New SQL migrations in
 
 ```bash
 # Check prerequisites
-.venv/bin/python scripts/setup.py check
+.venv/bin/python scripts/setup.py check --docker
 
 # Check the server speaks MCP
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | .venv/bin/python -m samos.server
+docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os \
+  sh -c 'echo '{"'"'"'jsonrpc":"2.0","id":1,"method":"initialize"'"'"'}' | python -m samos.server'
 
 # Verify iCloud calendar connectivity (when not in offline mode)
-.venv/bin/python scripts/setup.py calendar
+docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os \
+  python scripts/setup.py calendar
 
-# List tools via the CLI helper (or call tools/call over stdio)
+# List tools via the CLI helper
 .venv/bin/python scripts/schedule.py today
-.venv/bin/python scripts/workout.py prs
-.venv/bin/python scripts/meal_log.py today
 ```
 
 ## Docker
@@ -141,7 +180,7 @@ chmod 777 /home/server/data
 
 ### Hermes cannot connect
 
-- Verify the `command` path in the MCP config points to the venv Python.
+- Verify the `command` path in the MCP config points to the venv Python or `docker`.
 - Check that `SAMOS_DB_PATH` is set and the directory is writable.
 - Run the server manually and confirm it responds to the initialize message.
 - Run `.venv/bin/python scripts/setup.py check` for a full prerequisite report.

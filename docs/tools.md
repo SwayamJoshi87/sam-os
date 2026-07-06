@@ -89,11 +89,11 @@ The sam-os MCP server exposes these tools. Hermes can call any of them.
 
 | Tool | Description |
 |---|---|
-| `setup_check_tool` | Verify prerequisites: venv, deps, DB path, credentials, config. |
-| `setup_write_hermes_config(output_path, db_path, tz, calendar_offline)` | Generate Hermes `mcp.json`. |
+| `setup_check_tool(use_docker=false)` | Verify prerequisites: venv/docker, deps, DB path, credentials, config. |
+| `setup_write_hermes_config(output_path, db_path, tz, calendar_offline, use_docker=false)` | Generate Hermes `mcp.json` for venv or Docker. |
 | `setup_seed_template` | Create a starter weekly template if empty. |
 | `setup_verify_calendar` | Test iCloud CalDAV connectivity. |
-| `setup_run(write_hermes, seed_template_flag, calendar_offline)` | Run the full setup routine. |
+| `setup_run(write_hermes, seed_template_flag, calendar_offline, use_docker=false)` | Run the full setup routine. |
 
 ## System
 

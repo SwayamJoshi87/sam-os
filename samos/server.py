@@ -582,9 +582,9 @@ def task_note(task_name_or_id: str, note: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def setup_check_tool() -> dict:
-    """Verify sam-os prerequisites: venv, deps, DB path, credentials, config."""
-    return _handle(setup_check)
+def setup_check_tool(use_docker: bool = False) -> dict:
+    """Verify sam-os prerequisites: venv/docker, deps, DB path, credentials, config."""
+    return _handle(setup_check, use_docker)
 
 
 @mcp.tool()
@@ -593,9 +593,10 @@ def setup_write_hermes_config(
     db_path: str | None = None,
     tz: str | None = None,
     calendar_offline: bool = False,
+    use_docker: bool = False,
 ) -> dict:
-    """Generate a Hermes mcp.json config for this installation."""
-    return _handle(write_hermes_config, output_path, db_path, tz, calendar_offline)
+    """Generate a Hermes mcp.json config for venv or Docker deployment."""
+    return _handle(write_hermes_config, output_path, db_path, tz, calendar_offline, use_docker)
 
 
 @mcp.tool()
@@ -615,9 +616,10 @@ def setup_run(
     write_hermes: bool = True,
     seed_template_flag: bool = True,
     calendar_offline: bool = False,
+    use_docker: bool = False,
 ) -> dict:
     """Run full setup: check, write Hermes config, seed template, verify calendar."""
-    return _handle(run_setup, write_hermes, seed_template_flag, calendar_offline)
+    return _handle(run_setup, write_hermes, seed_template_flag, calendar_offline, use_docker)
 
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,49 @@ as a Python MCP server (`samos/server.py`) that Hermes launches over stdio.
 
 ## Agent setup checklist
 
-When setting up sam-os for the first time, run these steps in order:
+When setting up sam-os for the first time, run these steps in order.
+
+### Docker deployment (recommended)
+
+1. **Clone and configure**
+   ```bash
+   git clone https://github.com/SwayamJoshi87/sam-os.git /home/server/sam-os
+   cd /home/server/sam-os
+   cp .env.example .env
+   # Edit .env: SAMOS_DB_HOST_PATH, TZ, optional BACKUP_PG_DSN
+   ```
+
+2. **Build image**
+   ```bash
+   docker compose -f docker/docker-compose.yml --env-file .env build
+   ```
+
+3. **Run setup inside the container**
+   ```bash
+   docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os \
+     python scripts/setup.py run --calendar-offline
+   ```
+   or from the host if Python is available:
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   .venv/bin/python scripts/setup.py run --docker --calendar-offline
+   ```
+
+4. **Verify prerequisites**
+   ```bash
+   .venv/bin/python scripts/setup.py check --docker
+   ```
+   or via MCP: `setup_check_tool(use_docker=true)`
+
+5. **(Optional) Verify iCloud calendar credentials**
+   ```bash
+   docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os \
+     python scripts/setup.py calendar
+   ```
+   or via MCP: `setup_verify_calendar()`
+
+### venv deployment (alternative)
 
 1. **Create the virtualenv and install dependencies**
    ```bash
@@ -34,39 +76,16 @@ When setting up sam-os for the first time, run these steps in order:
    .venv/bin/pip install -r requirements.txt
    ```
 
-2. **Check prerequisites**
+2. **Run full setup**
+   ```bash
+   .venv/bin/python scripts/setup.py run --calendar-offline
+   ```
+
+3. **Verify**
    ```bash
    .venv/bin/python scripts/setup.py check
    ```
    or via MCP: `setup_check_tool()`
-
-3. **Write the Hermes MCP config**
-   ```bash
-   .venv/bin/python scripts/setup.py hermes --calendar-offline
-   ```
-   or via MCP: `setup_write_hermes_config(calendar_offline=true)`
-
-4. **Seed a starter weekly template**
-   ```bash
-   .venv/bin/python scripts/setup.py seed
-   ```
-   or via MCP: `setup_seed_template()`
-
-5. **(Optional) Verify iCloud calendar credentials**
-   ```bash
-   .venv/bin/python scripts/setup.py calendar
-   ```
-   or via MCP: `setup_verify_calendar()`
-
-6. **Run the server**
-   ```bash
-   .venv/bin/python -m samos.server
-   ```
-
-You can also run the full setup in one shot:
-```bash
-.venv/bin/python scripts/setup.py run --calendar-offline
-```
 
 ## How to run
 

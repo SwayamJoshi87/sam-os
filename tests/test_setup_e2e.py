@@ -43,3 +43,16 @@ def test_setup_write_hermes_config(server: MCPServerProcess, tmp_path: Path):
     assert output.exists()
     config = json.loads(output.read_text())
     assert "sam-os" in config["mcpServers"]
+    assert resp["data"]["deployment"] == "venv"
+
+
+def test_setup_write_hermes_config_docker(server: MCPServerProcess, tmp_path: Path):
+    output = tmp_path / "mcp-docker.json"
+    resp = server.call_tool(
+        "setup_write_hermes_config",
+        {"output_path": str(output), "calendar_offline": True, "use_docker": True},
+    )
+    assert resp["ok"]
+    assert resp["data"]["deployment"] == "docker"
+    config = json.loads(output.read_text())
+    assert config["mcpServers"]["sam-os"]["command"] == "docker"
