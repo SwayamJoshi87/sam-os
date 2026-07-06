@@ -2,7 +2,7 @@
 
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .db import DB_PATH
@@ -16,6 +16,16 @@ SYNC_TABLES = [
     "meals",
     "daily_targets",
     "schedule_log",
+    "water_log",
+    "sleep_log",
+    "mood_log",
+    "habits",
+    "habit_logs",
+    "shopping_items",
+    "away_dates",
+    "task_notes",
+    "meal_templates",
+    "backup_runs",
 ]
 
 
@@ -80,29 +90,101 @@ def sync_table(sqlite_conn, pg_conn, table):
     return len(rows)
 
 
+def _record_backup(status: str, details: str | None = None, rows_synced: int = 0):
+    try:
+        from .db import get_conn
+
+        with get_conn() as c:
+            c.execute(
+                "INSERT INTO backup_runs (status, details, rows_synced) VALUES (?, ?, ?)",
+                (status, details, rows_synced),
+            )
+    except Exception as e:
+        print(f"  could not record backup status: {e}")
+
+
+def backup_status(days: int = 7) -> dict:
+    """Return recent backup run status."""
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        from .db import get_conn
+
+        with get_conn() as c:
+            total = c.execute(
+                "SELECT COUNT(*) AS n FROM backup_runs WHERE started_at >= ?",
+                (since,),
+            ).fetchone()["n"]
+            last = c.execute(
+                "SELECT * FROM backup_runs ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+            failures = c.execute(
+                "SELECT COUNT(*) AS n FROM backup_runs WHERE started_at >= ? AND status='failed'",
+                (since,),
+            ).fetchone()["n"]
+        return {
+            "total_runs": total,
+            "failed_runs": failures,
+            "last_run": dict(last) if last else None,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def do_backup():
     print(f"[{datetime.now().isoformat()}] starting backup from {DB_PATH}")
     try:
         import psycopg2
     except ImportError:
         print("psycopg2 not installed, backup disabled")
+        _record_backup("failed", "psycopg2 not installed")
         return
+
+    _record_backup("running")
+    run_id = None
+    try:
+        from .db import get_conn
+
+        with get_conn() as c:
+            run_id = c.execute(
+                "SELECT id FROM backup_runs ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()["id"]
+    except Exception:
+        pass
 
     sqlite_conn = sqlite3.connect(str(DB_PATH))
     sqlite_conn.row_factory = sqlite3.Row
+    total_rows = 0
     try:
         if not init_pg_schema():
+            _record_backup("failed", "could not initialize pg schema")
             return
         pg_conn = psycopg2.connect(_pg_dsn())
         try:
             for table in SYNC_TABLES:
                 try:
                     n = sync_table(sqlite_conn, pg_conn, table)
+                    total_rows += n
                     print(f"  {table}: {n} rows synced")
                 except Exception as e:
                     print(f"  {table}: ERROR {e}")
+            _record_backup("success", "backup complete", total_rows)
+            if run_id is not None:
+                try:
+                    from .db import get_conn
+
+                    with get_conn() as c:
+                        c.execute(
+                            "UPDATE backup_runs SET finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (run_id,),
+                        )
+                except Exception:
+                    pass
             print("backup complete")
         finally:
             pg_conn.close()
+    except Exception as e:
+        _record_backup("failed", str(e))
+        print(f"backup failed: {e}")
+        raise
     finally:
         sqlite_conn.close()

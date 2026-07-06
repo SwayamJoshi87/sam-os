@@ -1,6 +1,7 @@
 """Shared schedule helpers — template + today_instances with ad-hoc edits."""
 
 import re
+import sqlite3
 from datetime import datetime, timedelta
 
 from .db import ConflictError, NotFoundError, ValidationError, get_conn
@@ -59,13 +60,24 @@ def day_name(dow: int) -> str:
     return DAYS[dow]
 
 
+def _is_away(date_str: str, conn) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM away_dates WHERE ? BETWEEN start_date AND end_date LIMIT 1",
+        (date_str,),
+    ).fetchone()
+    return row is not None
+
+
 def instantiate_day(date_str: str, dow: int, source: str = "cron") -> int:
     """Copy template tasks for `dow` into today_instances for `date_str`.
 
     Idempotent — UNIQUE(date, task_id) prevents dupes.
+    Skips creation if the date falls inside an away range.
     Returns count of new rows created.
     """
     with get_conn() as c:
+        if _is_away(date_str, c):
+            return 0
         cur = c.execute(
             """
             INSERT OR IGNORE INTO today_instances (date, task_id, status, source)
@@ -422,6 +434,139 @@ def template_week() -> dict:
             ).fetchall()
             out[DAYS[dow]] = [dict(r) for r in rows]
     return out
+
+
+def _category_id_or_create(category_name: str, conn) -> int:
+    """Return existing category id, creating the category with a default color if missing."""
+    row = conn.execute(
+        "SELECT id FROM categories WHERE name LIKE ?", (f"%{category_name}%",)
+    ).fetchone()
+    if row:
+        return row["id"]
+    conn.execute(
+        "INSERT INTO categories (name, color) VALUES (?, ?)",
+        (category_name.strip().lower(), "#808080"),
+    )
+    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def add_category(name: str, color: str = "#808080") -> dict:
+    """Add a new schedule category."""
+    name = name.strip().lower()
+    if not name:
+        raise ValidationError("category name cannot be empty")
+    with get_conn() as c:
+        try:
+            c.execute(
+                "INSERT INTO categories (name, color) VALUES (?, ?)",
+                (name, color),
+            )
+        except sqlite3.IntegrityError:
+            raise ConflictError(f"category '{name}' already exists", {"category": name})
+        cat_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {"id": cat_id, "name": name, "color": color}
+
+
+def template_add(
+    name: str,
+    day: str,
+    time_start: str,
+    duration_min: int,
+    category: str,
+    fixed: bool = False,
+) -> dict:
+    """Add a new recurring task to the weekly template."""
+    name = name.strip()
+    if not name:
+        raise ValidationError("task name cannot be empty")
+    dow = _validate_day(day)
+    time_start = _validate_time(time_start)
+    if duration_min <= 0:
+        raise ValidationError("duration_min must be positive", {"value": duration_min})
+
+    with get_conn() as c:
+        cat_id = _category_id_or_create(category, c)
+        c.execute(
+            """
+            INSERT INTO tasks (category_id, name, day_of_week, time_start, duration_min, fixed)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (cat_id, name, dow, time_start, duration_min, 1 if fixed else 0),
+        )
+        task_id = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {
+        "id": task_id,
+        "name": name,
+        "day": DAYS[dow],
+        "time_start": time_start,
+        "duration_min": duration_min,
+        "category": category.strip().lower(),
+        "fixed": bool(fixed),
+    }
+
+
+def template_remove(task_name: str) -> dict:
+    """Remove a recurring task from the weekly template."""
+    with get_conn() as c:
+        task = c.execute(
+            "SELECT id, name, day_of_week FROM tasks WHERE name LIKE ? AND day_of_week BETWEEN 0 AND 6 LIMIT 1",
+            (f"%{task_name}%",),
+        ).fetchone()
+        if not task:
+            raise NotFoundError(
+                f"no template task matching '{task_name}'",
+                {"task": task_name},
+            )
+        c.execute("DELETE FROM tasks WHERE id=?", (task["id"],))
+    return {"removed": task["name"], "day": DAYS[task["day_of_week"]]}
+
+
+def template_update(
+    task_name: str,
+    name: str | None = None,
+    day: str | None = None,
+    time_start: str | None = None,
+    duration_min: int | None = None,
+    category: str | None = None,
+    fixed: bool | None = None,
+) -> dict:
+    """Update fields of an existing weekly template task."""
+    with get_conn() as c:
+        task = c.execute(
+            "SELECT * FROM tasks WHERE name LIKE ? AND day_of_week BETWEEN 0 AND 6 LIMIT 1",
+            (f"%{task_name}%",),
+        ).fetchone()
+        if not task:
+            raise NotFoundError(
+                f"no template task matching '{task_name}'",
+                {"task": task_name},
+            )
+
+        updates = {}
+        if name is not None:
+            updates["name"] = name.strip()
+        if day is not None:
+            updates["day_of_week"] = _validate_day(day)
+        if time_start is not None:
+            updates["time_start"] = _validate_time(time_start)
+        if duration_min is not None:
+            if duration_min <= 0:
+                raise ValidationError("duration_min must be positive", {"value": duration_min})
+            updates["duration_min"] = duration_min
+        if category is not None:
+            updates["category_id"] = _category_id_or_create(category, c)
+        if fixed is not None:
+            updates["fixed"] = 1 if fixed else 0
+
+        if updates:
+            set_clause = ", ".join(f"{k}=?" for k in updates)
+            c.execute(
+                f"UPDATE tasks SET {set_clause} WHERE id=?",
+                (*updates.values(), task["id"]),
+            )
+
+        row = c.execute("SELECT * FROM tasks WHERE id=?", (task["id"],)).fetchone()
+    return dict(row)
 
 
 def template_reschedule(task_name: str, new_day: str) -> dict:

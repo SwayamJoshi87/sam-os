@@ -6,9 +6,13 @@ Personal operating system — schedule, gym, and nutrition tracking. Now an
 ## What it does
 
 - **Schedule** — weekly template + per-day living instances (moves, skips, reasons)
+- **Template management** — add/remove/update recurring tasks via MCP
 - **Gym** — workout log + PR tracking (Epley 1RM)
-- **Meals** — calorie/macro logging with daily target adherence
+- **Meals** — calorie/macro logging with daily target adherence + reusable meal templates
+- **Wellness** — water, sleep, mood, and weight tracking
+- **Productivity** — daily habits, shopping list, away mode, task notes
 - **MCP tools** — Hermes calls `schedule_today`, `gym_log`, `meal_log`, etc.
+- **Composite state** — `state://today` resource bundles schedule, gym, meals, wellness, habits, and shopping
 - **Internal scheduler** — all old cron jobs run inside the server process
 - **Daily backup** to Neon Postgres (3am local time)
 
@@ -44,11 +48,11 @@ Tell Hermes to launch the server via `hermes/mcp.json`:
 
 ## Schedule model
 
-- **Template** (`schedule_week`, `template_reschedule`) — the recurring weekly plan.
+- **Template** (`schedule_week`, `template_add`, `template_update`, `template_remove`, `template_reschedule`) — the recurring weekly plan.
 - **Today instances** (`schedule_today`, `schedule_add_today`, `schedule_remove_today`, `schedule_retime_today`) — the editable schedule for the current day.
 
 When something changes **today**, use the today-editing tools. When a change should be
-**permanent**, use `template_reschedule`.
+**permanent**, use the template-management tools.
 
 ## Conflict resolution
 

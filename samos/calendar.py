@@ -16,7 +16,7 @@ from .schedule import get_today_view, today_date
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
 ENV_PATH = HERMES_HOME / ".env"
 CALDAV_URL = "https://caldav.icloud.com/"
-DEFAULT_USERNAME = "swayam.joshi1903@gmail.com"
+DEFAULT_USERNAME = os.environ.get("ICLOUD_USERNAME", "")
 TARGET_CALENDAR_NAME = os.environ.get("SAMOS_CALENDAR", "sam-os")
 TORONTO = ZoneInfo("America/Toronto")
 

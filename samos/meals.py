@@ -162,3 +162,67 @@ def week_meals() -> list[dict]:
             (since,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Meal templates
+# ---------------------------------------------------------------------------
+
+from .db import NotFoundError
+
+
+def add_meal_template(
+    name: str,
+    meal_type: str,
+    calories: float,
+    protein_g: float | None = None,
+    carbs_g: float | None = None,
+    fat_g: float | None = None,
+    description: str | None = None,
+) -> dict:
+    """Create a reusable meal template."""
+    mt = _validate_meal_type(meal_type)
+    if calories < 0:
+        raise ValidationError("calories cannot be negative", {"value": calories})
+    name = name.strip()
+    if not name:
+        raise ValidationError("template name cannot be empty")
+    with get_conn() as c:
+        c.execute(
+            """
+            INSERT INTO meal_templates (name, meal_type, calories, protein_g, carbs_g, fat_g, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (name, mt, calories, protein_g, carbs_g, fat_g, description),
+        )
+    return {"name": name, "meal_type": mt, "calories": calories}
+
+
+def list_meal_templates() -> list[dict]:
+    with get_conn() as c:
+        rows = c.execute(
+            "SELECT * FROM meal_templates ORDER BY meal_type, name"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def log_meal_template(name: str, date_str: str | None = None) -> dict:
+    """Log a meal from a template by name."""
+    d = date_str or today_date()
+    with get_conn() as c:
+        row = c.execute(
+            "SELECT * FROM meal_templates WHERE name LIKE ? LIMIT 1",
+            (f"%{name}%",),
+        ).fetchone()
+        if not row:
+            raise NotFoundError(f"no meal template matching '{name}'", {"template": name})
+    return log_meal(
+        date_str=d,
+        meal_type=row["meal_type"],
+        calories=row["calories"],
+        description=row["description"],
+        protein_g=row["protein_g"],
+        carbs_g=row["carbs_g"],
+        fat_g=row["fat_g"],
+        source="template",
+    )

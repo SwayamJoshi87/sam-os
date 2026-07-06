@@ -87,7 +87,98 @@ CREATE TABLE IF NOT EXISTS schedule_log (
     skipped_reason  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS water_log (
+    id         INTEGER PRIMARY KEY,
+    date       TEXT NOT NULL,
+    amount_ml  INTEGER NOT NULL,
+    logged_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sleep_log (
+    id          INTEGER PRIMARY KEY,
+    date        TEXT NOT NULL UNIQUE,
+    hours       REAL,
+    quality     INTEGER,
+    notes       TEXT,
+    logged_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mood_log (
+    id        INTEGER PRIMARY KEY,
+    date      TEXT NOT NULL,
+    level     INTEGER NOT NULL,
+    label     TEXT,
+    note      TEXT,
+    logged_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS habits (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    description TEXT,
+    active      INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS habit_logs (
+    id        INTEGER PRIMARY KEY,
+    habit_id  INTEGER NOT NULL,
+    date      TEXT NOT NULL,
+    status    TEXT NOT NULL,
+    note      TEXT,
+    logged_at TEXT NOT NULL,
+    UNIQUE(habit_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS shopping_items (
+    id          INTEGER PRIMARY KEY,
+    item        TEXT NOT NULL,
+    category    TEXT,
+    purchased   INTEGER DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS away_dates (
+    id          INTEGER PRIMARY KEY,
+    start_date  TEXT NOT NULL,
+    end_date    TEXT NOT NULL,
+    reason      TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS task_notes (
+    id          INTEGER PRIMARY KEY,
+    instance_id INTEGER NOT NULL,
+    note        TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS meal_templates (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    meal_type   TEXT NOT NULL,
+    calories    REAL NOT NULL,
+    protein_g   REAL,
+    carbs_g     REAL,
+    fat_g       REAL,
+    description TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS backup_runs (
+    id          INTEGER PRIMARY KEY,
+    started_at  TEXT NOT NULL,
+    finished_at TEXT,
+    status      TEXT NOT NULL,
+    details     TEXT,
+    rows_synced INTEGER DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_pg_meals_date ON meals(date);
 CREATE INDEX IF NOT EXISTS idx_pg_today_date ON today_instances(date);
 CREATE INDEX IF NOT EXISTS idx_pg_workouts_date ON workouts(date);
 CREATE INDEX IF NOT EXISTS idx_pg_prs_exercise ON prs(exercise, gym);
+CREATE INDEX IF NOT EXISTS idx_pg_water_date ON water_log(date);
+CREATE INDEX IF NOT EXISTS idx_pg_sleep_date ON sleep_log(date);
+CREATE INDEX IF NOT EXISTS idx_pg_mood_date ON mood_log(date);
+CREATE INDEX IF NOT EXISTS idx_pg_habit_logs_date ON habit_logs(date);
+CREATE INDEX IF NOT EXISTS idx_pg_backup_runs_started ON backup_runs(started_at);

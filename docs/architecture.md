@@ -76,10 +76,26 @@ APScheduler runs these jobs in a background thread inside the MCP server:
 Ad-hoc changes today should only touch `today_instances`. Permanent changes should
 rewrite the template.
 
+Use `template_add`, `template_remove`, and `template_update` to manage the weekly
+template through MCP. `schedule_add_today` creates ad-hoc tasks that do *not*
+appear in the template.
+
 ## Conflict handling
 
 The conflict detector returns conflicts **and** proposed resolutions. It never
 auto-applies a move. Hermes presents the options and the user chooses.
+
+## Away mode
+
+`away_dates` stores date ranges where the morning instantiation job should skip
+creating `today_instances`. This is useful for vacations or sick days without
+having to edit the template.
+
+## Backup container
+
+The backup job runs inside the same `sam-os` container as the MCP server. There
+is no separate backup container. The scheduler triggers `do_backup()` at 3am,
+which reads SQLite and upserts into Neon Postgres. `backup_runs` tracks outcomes.
 
 ## Open ports
 

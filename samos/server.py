@@ -18,7 +18,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from mcp.server.fastmcp import FastMCP
 
 from . import __version__
-from .backup import do_backup
+from .backup import backup_status, do_backup
 from .calendar import detect_conflicts as calendar_detect_conflicts
 from .calendar import resolve_conflict as calendar_resolve_conflict
 from .calendar import sync_today_to_icloud
@@ -32,8 +32,35 @@ from .db import (
 from .gym import list_prs as gym_list_prs
 from .gym import log_workout as gym_log_workout
 from .gym import parse_workout, recent_workouts
-from .meals import get_day_meals, get_day_totals, get_target, log_meal, set_target, today_meals, week_meals
+from .insights import today_state, weekly_prep
+from .meals import (
+    add_meal_template,
+    get_day_meals,
+    get_day_totals,
+    get_target,
+    list_meal_templates,
+    log_meal,
+    log_meal_template,
+    set_target,
+    today_meals,
+    week_meals,
+)
+from .productivity import (
+    add_away_dates,
+    add_habit,
+    add_shopping_item,
+    add_task_note,
+    clear_purchased_items,
+    habits_today,
+    is_away,
+    list_away_dates,
+    list_habits,
+    log_habit,
+    mark_shopping_purchased,
+    shopping_list,
+)
 from .schedule import (
+    add_category,
     add_today_task,
     diff_today_vs_template,
     ensure_today,
@@ -44,10 +71,23 @@ from .schedule import (
     remove_today_task,
     retime_today_task,
     stats as schedule_stats,
+    template_add as template_add_task,
+    template_remove as template_remove_task,
     template_reschedule,
+    template_update as template_update_task,
     template_week,
     today_date,
     week_history,
+)
+from .wellness import (
+    log_mood,
+    log_sleep,
+    log_water,
+    mood_history,
+    sleep_history,
+    water_today,
+    water_week,
+    weight_history,
 )
 
 
@@ -242,6 +282,54 @@ def schedule_stats(days: int = 7) -> dict:
     return _handle(schedule_stats, days)
 
 
+@mcp.tool()
+def category_add(name: str, color: str = "#808080") -> dict:
+    """Add a new schedule category."""
+    return _handle(add_category, name, color)
+
+
+@mcp.tool()
+def template_add(
+    name: str,
+    day: str,
+    time_start: str,
+    duration_min: int,
+    category: str,
+    fixed: bool = False,
+) -> dict:
+    """Add a recurring task to the weekly template."""
+    return _handle(template_add_task, name, day, time_start, duration_min, category, fixed)
+
+
+@mcp.tool()
+def template_remove(task_name: str) -> dict:
+    """Remove a recurring task from the weekly template."""
+    return _handle(template_remove_task, task_name)
+
+
+@mcp.tool()
+def template_update(
+    task_name: str,
+    name: str | None = None,
+    day: str | None = None,
+    time_start: str | None = None,
+    duration_min: int | None = None,
+    category: str | None = None,
+    fixed: bool | None = None,
+) -> dict:
+    """Update an existing recurring template task."""
+    return _handle(
+        template_update_task,
+        task_name,
+        name,
+        day,
+        time_start,
+        duration_min,
+        category,
+        fixed,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Conflict tools
 # ---------------------------------------------------------------------------
@@ -328,6 +416,160 @@ def meals_week() -> dict:
     return _handle(week_meals)
 
 
+@mcp.tool()
+def meal_template_add(
+    name: str,
+    meal_type: str,
+    calories: float,
+    protein_g: float | None = None,
+    carbs_g: float | None = None,
+    fat_g: float | None = None,
+    description: str | None = None,
+) -> dict:
+    """Create a reusable meal template."""
+    return _handle(add_meal_template, name, meal_type, calories, protein_g, carbs_g, fat_g, description)
+
+
+@mcp.tool()
+def meal_templates_list() -> dict:
+    """List all meal templates."""
+    return _handle(list_meal_templates)
+
+
+@mcp.tool()
+def meal_log_template(name: str) -> dict:
+    """Log a meal from a template by name."""
+    return _handle(log_meal_template, name)
+
+
+# ---------------------------------------------------------------------------
+# Wellness tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def water_log(amount_ml: int) -> dict:
+    """Log water intake in millilitres for today."""
+    return _handle(log_water, amount_ml)
+
+
+@mcp.tool()
+def water_today_tool() -> dict:
+    """Return today's water intake total and entries."""
+    return _handle(water_today)
+
+
+@mcp.tool()
+def water_week_tool(days: int = 7) -> dict:
+    """Return daily water totals for the last N days."""
+    return _handle(water_week, days)
+
+
+@mcp.tool()
+def sleep_log(hours: float, quality: int | None = None, notes: str | None = None) -> dict:
+    """Log last night's sleep. Quality is 1-10."""
+    return _handle(log_sleep, hours, quality, notes)
+
+
+@mcp.tool()
+def sleep_history_tool(days: int = 7) -> dict:
+    """Return sleep history for the last N days."""
+    return _handle(sleep_history, days)
+
+
+@mcp.tool()
+def mood_log(level: int, label: str | None = None, note: str | None = None) -> dict:
+    """Log mood level 1-10 with optional label and note."""
+    return _handle(log_mood, level, label, note)
+
+
+@mcp.tool()
+def mood_history_tool(days: int = 7) -> dict:
+    """Return mood history for the last N days."""
+    return _handle(mood_history, days)
+
+
+@mcp.tool()
+def weight_history_tool(days: int = 30) -> dict:
+    """Return weight entries from daily targets for the last N days."""
+    return _handle(weight_history, days)
+
+
+# ---------------------------------------------------------------------------
+# Productivity tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def habit_add(name: str, description: str | None = None) -> dict:
+    """Create a new daily habit."""
+    return _handle(add_habit, name, description)
+
+
+@mcp.tool()
+def habits_list() -> dict:
+    """List all habits."""
+    return _handle(list_habits)
+
+
+@mcp.tool()
+def habit_log(habit_name: str, status: str, note: str | None = None) -> dict:
+    """Mark a habit done or missed for today."""
+    return _handle(log_habit, habit_name, status, None, note)
+
+
+@mcp.tool()
+def habits_today_tool() -> dict:
+    """Return all habits and today's status."""
+    return _handle(habits_today)
+
+
+@mcp.tool()
+def shopping_add(item: str, category: str | None = None) -> dict:
+    """Add an item to the shopping list."""
+    return _handle(add_shopping_item, item, category)
+
+
+@mcp.tool()
+def shopping_list_tool(show_purchased: bool = False) -> dict:
+    """Return the shopping list."""
+    return _handle(shopping_list, show_purchased)
+
+
+@mcp.tool()
+def shopping_mark_purchased(item_id: int, purchased: bool = True) -> dict:
+    """Mark a shopping item as purchased or not."""
+    return _handle(mark_shopping_purchased, item_id, purchased)
+
+
+@mcp.tool()
+def shopping_clear_purchased() -> dict:
+    """Remove all purchased shopping items."""
+    return _handle(clear_purchased_items)
+
+
+@mcp.tool()
+def away_mode_add(start_date: str, end_date: str, reason: str | None = None) -> dict:
+    """Suppress schedule instantiation for a date range."""
+    return _handle(add_away_dates, start_date, end_date, reason)
+
+
+@mcp.tool()
+def away_mode_list() -> dict:
+    """List all away-date ranges."""
+    return _handle(list_away_dates)
+
+
+@mcp.tool()
+def away_mode_check(date: str | None = None) -> dict:
+    """Check whether a date falls inside an away range."""
+    return _handle(is_away, date)
+
+
+@mcp.tool()
+def task_note(task_name_or_id: str, note: str) -> dict:
+    """Attach a note to today's instance of a task."""
+    return _handle(add_task_note, task_name_or_id, note)
+
+
 # ---------------------------------------------------------------------------
 # System tools
 # ---------------------------------------------------------------------------
@@ -355,6 +597,34 @@ def system_help() -> dict:
     }
 
 
+@mcp.tool()
+def system_health() -> dict:
+    """Return DB size, row counts, and scheduler/backup status."""
+    from .db import get_conn
+
+    data = {"db_path": str(DB_PATH), "db_exists": DB_PATH.exists()}
+    if DB_PATH.exists():
+        data["db_size_bytes"] = DB_PATH.stat().st_size
+    schema, counts = schema_and_counts()
+    data["row_counts"] = counts
+    data["backup"] = backup_status(7)
+    data["calendar_offline"] = os.environ.get("SAMOS_CALENDAR_OFFLINE") == "1"
+    data["timezone"] = os.environ.get("TZ", "America/Toronto")
+    return {"ok": True, "data": data}
+
+
+@mcp.tool()
+def backup_status_tool(days: int = 7) -> dict:
+    """Return recent backup run status."""
+    return _handle(backup_status, days)
+
+
+@mcp.tool()
+def weekly_prep_tool() -> dict:
+    """Return a Sunday-style summary: last week, upcoming template, PRs, backup status."""
+    return _handle(weekly_prep)
+
+
 # ---------------------------------------------------------------------------
 # Resources
 # ---------------------------------------------------------------------------
@@ -378,6 +648,12 @@ def gym_prs_resource() -> str:
 @mcp.resource("meals://today")
 def meals_today_resource() -> str:
     return json.dumps(today_meals(), indent=2)
+
+
+@mcp.resource("state://today")
+def state_today_resource() -> str:
+    """Composite snapshot of today across all domains."""
+    return json.dumps(today_state(), indent=2)
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,16 @@ The sam-os MCP server exposes these tools. Hermes can call any of them.
 | `schedule_history(days=7)` | Instance log for the last N days. |
 | `schedule_stats(days=7)` | Completion stats by category for the last N days. |
 
+## Template management
+
+| Tool | Description |
+|---|---|
+| `category_add(name, color="#808080")` | Add a new schedule category. |
+| `template_add(name, day, time_start, duration_min, category, fixed=false)` | Add a recurring task to the weekly template. |
+| `template_remove(task_name)` | Remove a recurring task from the template. |
+| `template_update(task_name, ...)` | Update any field of an existing template task. |
+| `template_reschedule(task_name, new_day)` | Move an existing template task to a different day. |
+
 ## Conflict resolution
 
 | Tool | Description |
@@ -41,12 +51,48 @@ The sam-os MCP server exposes these tools. Hermes can call any of them.
 | `meal_target(calories, protein_g, carbs_g, fat_g, weight_kg, notes)` | Set today's calorie/macro target. |
 | `meals_today` | Today's meals + totals vs target. |
 | `meals_week` | Last 7 days adherence. |
+| `meal_template_add(...)` | Create a reusable meal template. |
+| `meal_templates_list` | List all meal templates. |
+| `meal_log_template(name)` | Log a meal from a template by name. |
+
+## Wellness
+
+| Tool | Description |
+|---|---|
+| `water_log(amount_ml)` | Log water intake for today. |
+| `water_today_tool` | Today's water total and entries. |
+| `water_week_tool(days=7)` | Daily water totals for the last N days. |
+| `sleep_log(hours, quality, notes)` | Log last night's sleep. |
+| `sleep_history_tool(days=7)` | Sleep history. |
+| `mood_log(level, label, note)` | Log mood level 1-10. |
+| `mood_history_tool(days=7)` | Mood history. |
+| `weight_history_tool(days=30)` | Weight entries from daily targets. |
+
+## Productivity
+
+| Tool | Description |
+|---|---|
+| `habit_add(name, description)` | Create a daily habit. |
+| `habits_list` | List all habits. |
+| `habit_log(habit_name, status, note)` | Mark a habit done or missed for today. |
+| `habits_today_tool` | All habits and today's status. |
+| `shopping_add(item, category)` | Add an item to the shopping list. |
+| `shopping_list_tool(show_purchased=false)` | Return the shopping list. |
+| `shopping_mark_purchased(item_id, purchased=true)` | Mark an item purchased. |
+| `shopping_clear_purchased` | Remove purchased items. |
+| `away_mode_add(start_date, end_date, reason)` | Suppress schedule instantiation for a range. |
+| `away_mode_list` | List away-date ranges. |
+| `away_mode_check(date)` | Check if a date is inside an away range. |
+| `task_note(task_name_or_id, note)` | Attach a note to today's instance of a task. |
 
 ## System
 
 | Tool | Description |
 |---|---|
 | `system_help` | Dump tools, schema, row counts, conventions, and recovery info. |
+| `system_health` | DB size, row counts, backup status, and environment flags. |
+| `backup_status_tool(days=7)` | Recent backup run status. |
+| `weekly_prep_tool` | Sunday-style summary: last week, upcoming template, PRs, backup. |
 
 ## Resources
 
@@ -54,6 +100,7 @@ The sam-os MCP server exposes these tools. Hermes can call any of them.
 - `schedule://today` — today's schedule
 - `gym://prs` — PR list
 - `meals://today` — today's meals
+- `state://today` — composite snapshot of today (schedule, gym, meals, wellness, habits, shopping)
 
 ## Error format
 

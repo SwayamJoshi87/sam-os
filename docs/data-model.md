@@ -16,6 +16,16 @@ The same schema is mirrored in the Neon Postgres backup target.
 | `meals` | One row per meal (date, type, cals, P/C/F) | `id` |
 | `daily_targets` | Per-day calorie/macro target + weight | `id` |
 | `schedule_log` | Legacy — completion log (mostly superseded by today_instances) | `id` |
+| `water_log` | Water intake entries | `id` |
+| `sleep_log` | Sleep per night | `id` |
+| `mood_log` | Mood entries | `id` |
+| `habits` | Recurring daily habits | `id` |
+| `habit_logs` | Per-date habit status | `id` |
+| `shopping_items` | Shopping list | `id` |
+| `away_dates` | Date ranges where schedule instantiation is suppressed | `id` |
+| `task_notes` | Notes attached to today_instances | `id` |
+| `meal_templates` | Reusable meal templates | `id` |
+| `backup_runs` | Backup run history | `id` |
 
 ## Schema
 
@@ -49,6 +59,20 @@ FROM meals m
 LEFT JOIN daily_targets t ON m.date = t.date
 WHERE m.date = '2026-07-02'
 GROUP BY m.date, t.calories;
+
+-- daily water totals this week
+SELECT date, SUM(amount_ml) AS total_ml
+FROM water_log
+WHERE date >= date('now', '-7 days')
+GROUP BY date;
+
+-- habit streak current
+SELECT h.name, COUNT(*) AS streak
+FROM habits h
+JOIN habit_logs l ON l.habit_id=h.id
+WHERE l.status='done'
+  AND l.date > date('now', '-30 days')
+GROUP BY h.name;
 ```
 
 ## Key relationships
@@ -57,22 +81,19 @@ GROUP BY m.date, t.calories;
 - `today_instances.task_id → tasks.id` — many-to-one (per-day)
 - `prs.workout_id → workouts.id` — best PR per (exercise, gym)
 - `meals.date → daily_targets.date` — target lookup (LEFT JOIN since target is optional)
+- `habit_logs.habit_id → habits.id` — many-to-one
+- `task_notes.instance_id → today_instances.id` — many-to-one
 
 ## Schema versioning
 
-Migrations are versioned by filename: `000_base.sql`, `001_today_instances.sql`, `002_nutrition.sql`, `004_gym.sql`.
+Migrations are versioned by filename: `000_base.sql`, `001_today_instances.sql`, `002_nutrition.sql`, `004_gym.sql`, `005_wellness.sql`, `006_productivity.sql`, `007_meal_templates.sql`, `008_backup_status.sql`.
 
-- `000_base.sql` — categories, tasks, today_instances, schedule_log.
-- `001_today_instances.sql` — idempotent re-declaration of today_instances (legacy compatibility).
-- `002_nutrition.sql` — meals and daily_targets.
-- `004_gym.sql` — workouts and prs.
-
-Tasks with `day_of_week = -1` are ad-hoc backing tasks for `schedule_add_today`. They do not appear in the weekly template.
-The `init_db()` function applies all of them in order. New migrations should be
-added as `00N_*.sql` with N being the next integer.
+New migrations should be added as `00N_*.sql` with N being the next integer.
 
 All migrations use `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`
-so they're safe to re-run.
+so they're safe to re-run. Schema changes that cannot be expressed idempotently
+in plain SQL (for example adding a column) are handled by creating a new side
+table rather than using `ALTER TABLE`, which lets migrations stay idempotent.
 
 ## Why no FK constraints in the postgres target
 
