@@ -15,15 +15,20 @@ python3 -m venv .venv
 cp .env.example .env
 nano .env
 # Set SAMOS_DB_HOST_PATH=/home/server/data
-# Set BACKUP_PG_DSN=postgresql://user:***@host/db?sslmode=require
+# Set BACKUP_PG_DSN=postgresql://user:***@host/db?sslmode=require (optional)
 # Set TZ=America/Toronto (or your local timezone)
 
-# 4. Test the server manually
+# 4. Run automated setup (creates Hermes config and seeds a starter template)
+.venv/bin/python scripts/setup.py run --calendar-offline
+
+# Or step by step:
+.venv/bin/python scripts/setup.py check
+.venv/bin/python scripts/setup.py hermes --calendar-offline
+.venv/bin/python scripts/setup.py seed
+
+# 5. Test the server manually
 .venv/bin/python -m samos.server
 # (send Ctrl-C after confirming it starts)
-
-# 5. Configure Hermes to launch it
-# Copy hermes/mcp.json to your Hermes MCP config location and adjust paths.
 ```
 
 ## Host directory permissions
@@ -42,11 +47,21 @@ chown 1000:1000 /home/server/data
 
 ## Hermes MCP config
 
-Use `hermes/mcp.json` as a starting point. Key fields:
+The fastest way to generate the config is:
+
+```bash
+.venv/bin/python scripts/setup.py hermes --calendar-offline
+```
+
+This writes `~/.hermes/mcp.json` with the correct venv path, DB path, and timezone.
+You can also call `setup_write_hermes_config(...)` over MCP.
+
+If you prefer to write it by hand, use `hermes/mcp.json` as a starting point.
+Key fields:
 
 - `command` — path to the venv Python.
 - `args` — `[-u, -m, samos.server]`.
-- `env` — `SAMOS_DB_PATH`, `TZ`, `PYTHONIOENCODING`, `HERMES_HOME`.
+- `env` — `SAMOS_DB_PATH`, `TZ`, `PYTHONIOENCODING`, `HERMES_HOME`, `SAMOS_CALENDAR_OFFLINE`.
 
 Restart Hermes after updating the config.
 
@@ -65,8 +80,14 @@ DB is on the host, so updates never lose data. New SQL migrations in
 ## Verification
 
 ```bash
+# Check prerequisites
+.venv/bin/python scripts/setup.py check
+
 # Check the server speaks MCP
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | .venv/bin/python -m samos.server
+
+# Verify iCloud calendar connectivity (when not in offline mode)
+.venv/bin/python scripts/setup.py calendar
 
 # List tools via the CLI helper (or call tools/call over stdio)
 .venv/bin/python scripts/schedule.py today
@@ -94,10 +115,13 @@ server directly from the venv.
 
 ## Disabling the backup
 
-If you want to run without the Postgres backup:
+If you want to run without the Postgres backup, leave `BACKUP_PG_DSN` empty in `.env`.
+The backup job will log that backup is disabled and continue.
 
-- Leave `BACKUP_PG_DSN` empty in `.env`, or
-- Set `SAMOS_CALENDAR_OFFLINE=1` to skip iCloud CalDAV reads/writes.
+## Disabling the calendar
+
+Set `SAMOS_CALENDAR_OFFLINE=1` in `.env` or in the MCP server env to skip all
+iCloud CalDAV reads/writes. This is useful when credentials are not configured.
 
 ## Restoring from a postgres backup
 
@@ -120,6 +144,7 @@ chmod 777 /home/server/data
 - Verify the `command` path in the MCP config points to the venv Python.
 - Check that `SAMOS_DB_PATH` is set and the directory is writable.
 - Run the server manually and confirm it responds to the initialize message.
+- Run `.venv/bin/python scripts/setup.py check` for a full prerequisite report.
 
 ### Migrations fail on startup
 
@@ -128,3 +153,6 @@ Check the latest file in `scripts/sql/`. The error is printed to stderr:
 ```bash
 .venv/bin/python -m samos.server 2>&1 | tail -20
 ```
+
+If a migration cannot be made idempotent in plain SQL, add a side table instead
+of using `ALTER TABLE`. See `scripts/sql/006_productivity.sql` for the pattern.
