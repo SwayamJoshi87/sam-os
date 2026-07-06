@@ -38,6 +38,10 @@ SYNC_TABLES = [
     "task_notes",
     "meal_templates",
     "backup_runs",
+    "entities",
+    "relationships",
+    "observations",
+    "events",
 ]
 
 

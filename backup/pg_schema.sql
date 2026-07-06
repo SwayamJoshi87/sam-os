@@ -182,3 +182,46 @@ CREATE INDEX IF NOT EXISTS idx_pg_sleep_date ON sleep_log(date);
 CREATE INDEX IF NOT EXISTS idx_pg_mood_date ON mood_log(date);
 CREATE INDEX IF NOT EXISTS idx_pg_habit_logs_date ON habit_logs(date);
 CREATE INDEX IF NOT EXISTS idx_pg_backup_runs_started ON backup_runs(started_at);
+
+CREATE TABLE IF NOT EXISTS entities (
+    id          INTEGER PRIMARY KEY,
+    module      TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    entity_key  TEXT,
+    meta        TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS relationships (
+    id          INTEGER PRIMARY KEY,
+    source_id   INTEGER NOT NULL,
+    target_id   INTEGER NOT NULL,
+    rel_type    TEXT NOT NULL,
+    meta        TEXT,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS observations (
+    id          INTEGER PRIMARY KEY,
+    entity_id   INTEGER NOT NULL,
+    obs_key     TEXT NOT NULL,
+    obs_value   TEXT,
+    observed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id          INTEGER PRIMARY KEY,
+    entity_id   INTEGER,
+    module      TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    payload     TEXT,
+    occurred_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pg_entities_module ON entities(module);
+CREATE INDEX IF NOT EXISTS idx_pg_entities_type ON entities(entity_type);
+CREATE INDEX IF NOT EXISTS idx_pg_relationships_source ON relationships(source_id);
+CREATE INDEX IF NOT EXISTS idx_pg_relationships_target ON relationships(target_id);
+CREATE INDEX IF NOT EXISTS idx_pg_observations_entity ON observations(entity_id);
+CREATE INDEX IF NOT EXISTS idx_pg_events_module ON events(module);

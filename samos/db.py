@@ -70,10 +70,11 @@ def _handle(fn, *args, **kwargs):
 
 
 def init_db():
-    """Apply migrations from scripts/sql/*.sql and samos/modules/*/migrations/*.sql in order."""
+    """Apply migrations from scripts/sql/*.sql, scripts/sql/core/*.sql, and samos/modules/*/migrations/*.sql in order."""
     sql_dir = Path(__file__).parent.parent / "scripts" / "sql"
+    core_dir = sql_dir / "core"
     modules_dir = Path(__file__).parent / "modules"
-    migration_dirs = [sql_dir]
+    migration_dirs = [sql_dir, core_dir]
     if modules_dir.exists():
         for mod_dir in sorted(modules_dir.iterdir()):
             if mod_dir.is_dir():
