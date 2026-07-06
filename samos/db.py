@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -50,15 +51,42 @@ def get_conn():
         conn.close()
 
 
+def _ok(data):
+    return {"ok": True, "data": data}
+
+
+def _err(e: Exception):
+    if isinstance(e, SamosError):
+        return {"ok": False, "error": {"type": e.error_type, "message": e.message, "details": e.details}}
+    return {"ok": False, "error": {"type": "internal", "message": str(e), "details": {}}}
+
+
+def _handle(fn, *args, **kwargs):
+    try:
+        return _ok(fn(*args, **kwargs))
+    except Exception as e:
+        traceback.print_exc()
+        return _err(e)
+
+
 def init_db():
-    """Apply migrations from scripts/sql/*.sql in order. Idempotent."""
+    """Apply migrations from scripts/sql/*.sql and samos/modules/*/migrations/*.sql in order."""
     sql_dir = Path(__file__).parent.parent / "scripts" / "sql"
-    if not sql_dir.exists():
-        return
+    modules_dir = Path(__file__).parent / "modules"
+    migration_dirs = [sql_dir]
+    if modules_dir.exists():
+        for mod_dir in sorted(modules_dir.iterdir()):
+            if mod_dir.is_dir():
+                migs = mod_dir / "migrations"
+                migs.mkdir(exist_ok=True)
+                migration_dirs.append(migs)
     with get_conn() as conn:
         conn.execute("PRAGMA foreign_keys = ON")
-        for sql_file in sorted(sql_dir.glob("*.sql")):
-            conn.executescript(sql_file.read_text())
+        for mig_dir in migration_dirs:
+            if not mig_dir.exists():
+                continue
+            for sql_file in sorted(mig_dir.glob("*.sql")):
+                conn.executescript(sql_file.read_text())
 
 
 def schema_and_counts() -> tuple:
