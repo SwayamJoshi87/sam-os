@@ -9,6 +9,8 @@
 │  /home/server/data/schedule.db  ← SQLite   │
 │  /home/server/sam-os/           ← git repo │
 │       └── samos/server.py       ← MCP      │
+│       └── samos/modules/        ← domain   │
+│       └── samos/graph.py        ← graph    │
 └────────────────┬───────────────────────────┘
                  │
                  │ Hermes launches stdio subprocess
@@ -17,7 +19,8 @@
 ┌────────────────────────────────────────────┐
 │  Hermes / MCP client                       │
 │  Calls tools: schedule_today, gym_log,     │
-│               meal_log, detect_conflicts   │
+│               meal_log, detect_conflicts,  │
+│               agent_briefing_tool, ...     │
 └────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────┐
@@ -36,10 +39,44 @@
 ## Data flow
 
 1. **Hermes** launches `python -m samos.server` as a stdio subprocess.
-2. **MCP server** exposes tools/resources and runs an internal APScheduler for cron jobs.
+2. **MCP server** loads domain modules via `samos.registry`, exposes their tools/resources, and runs an internal APScheduler for cron jobs.
 3. **Reads/writes** go to the bind-mounted SQLite file.
 4. **Backup job** runs at 3am, reads the same SQLite, syncs to Neon Postgres.
 5. **No data in containers** — only code + ephemeral process state.
+
+## Module system
+
+`samos/registry.py` discovers every package under `samos/modules/`. Each module declares a `MODULE` manifest with:
+
+- `name`, `display_name`, `description`
+- `required_env` / `optional_env`
+- `tools`, `resources`, `scheduler_jobs`
+- a `migrations/` directory
+
+Modules are disabled at startup when required env vars are missing, so optional integrations (email, weather) stay out of the tool list until configured.
+
+## Core graph store
+
+`samos/graph.py` provides a small knowledge graph on top of SQLite:
+
+- `entities` — typed nodes (people, projects, topics, ...)
+- `observations` — timestamped facts attached to entities
+- `relationships` — typed edges between entities
+- `events` — an append-only audit log
+
+Personal-context modules write to their own optimized tables and can feed the graph store so agents can query across all of them.
+
+## Personal context modules
+
+`samos/modules/{todos,notes,journal,memories,projects,profile}/` store action items, notes, journal entries, remembered facts, projects, and user preferences. They are always enabled.
+
+## External integrations
+
+`samos/modules/email/` (IMAP/SMTP) and `samos/modules/weather/` (OpenWeatherMap) are optional. They register tools only when their credentials are present in the environment.
+
+## Agent interface
+
+`samos/modules/agent/` exposes read-only aggregation tools (`agent_context_tool`, `agent_query_tool`, `agent_search_tool`, `agent_briefing_tool`) plus `agent_remember_tool` for storing facts. sam-os owns the state and the query tools; Hermes/LLM owns reasoning and orchestration.
 
 ## Why MCP instead of REST
 

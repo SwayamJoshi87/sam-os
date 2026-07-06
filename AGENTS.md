@@ -1,25 +1,30 @@
 # Agent Guide for sam-os
 
-This repo is a personal OS for schedule, gym, and meal tracking. It is implemented
-as a Python MCP server (`samos/server.py`) that Hermes launches over stdio.
+This repo is a personal OS for schedule, gym, meals, wellness, productivity,
+personal context, email, weather, and agent queries. It is implemented as a Python
+MCP server (`samos/server.py`) that Hermes launches over stdio.
 
 ## Architecture
 
 - `samos/` — core package
-  - `server.py` — MCP server entrypoint; exposes tools/resources and runs APScheduler
-  - `schedule.py` — template + today_instances logic, including ad-hoc today editing
-  - `gym.py` — workout logging and PR tracking
-  - `meals.py` — meal logging, daily targets, and meal templates
-  - `calendar.py` — iCloud CalDAV sync + conflict detection
-  - `backup.py` — SQLite → Postgres sync + backup status tracking
-  - `wellness.py` — water, sleep, mood, and weight tracking
-  - `productivity.py` — habits, shopping list, away mode, task notes
-  - `insights.py` — composite `state://today` and weekly prep summaries
-  - `setup.py` — first-run / agent setup helpers
+  - `server.py` — MCP server entrypoint; loads modules and runs APScheduler
+  - `registry.py` — discovers modules under `samos/modules/` from their `MODULE` manifest
+  - `graph.py` — core graph store: entities, observations, relationships, events
   - `db.py` — SQLite connection, migrations, and exception types
+  - `calendar.py` — iCloud CalDAV sync + conflict detection
+  - `modules/<name>/` — domain modules, each with `models.py`, `tools.py`, `migrations/`
+    - `schedule/` — template + today_instances logic
+    - `fitness/` — workout logging and PR tracking
+    - `nutrition/` — meal logging, daily targets, and meal templates
+    - `wellness/` — water, sleep, mood, and weight tracking
+    - `productivity/` — habits, shopping list, away mode, task notes
+    - `system/` — setup, health, backup sync, state snapshots
+    - `todos/`, `notes/`, `journal/`, `memories/`, `projects/`, `profile/` — personal context
+    - `email/` — IMAP read + SMTP send *(optional, env-driven)*
+    - `weather/` — OpenWeatherMap current/forecast *(optional, env-driven)*
+    - `agent/` — unified context/query/search/briefing/remember interface
 - `scripts/` — thin CLI wrappers around `samos.*`
-- `scripts/setup.py` — standalone CLI for setup, config, and credential verification
-- `scripts/sql/*.sql` — idempotent SQLite migrations, applied on server startup
+- `scripts/sql/*.sql` and `scripts/sql/core/*.sql` — idempotent SQLite migrations
 - `backup/pg_schema.sql` — Postgres target schema
 - `docker/` — Dockerfile and compose file for containerized deployment
 - `hermes/mcp.json` — sample Hermes MCP config
@@ -127,11 +132,11 @@ docker compose -f docker/docker-compose.yml --env-file .env run --rm sam-os
 
 ## Adding a new tool
 
-1. Add the domain function in the appropriate `samos/*.py` module.
-2. Wrap it with `_handle(fn, ...)` in `samos/server.py` to get consistent error handling.
-3. Decorate with `@mcp.tool()` and write a clear docstring — that docstring becomes
-   the tool description Hermes sees.
-4. Update `docs/tools.md`.
+1. Add the domain function in the appropriate `samos/modules/<name>/models.py`.
+2. Wrap it with `_handle(fn, ...)` in `samos/modules/<name>/tools.py`.
+3. Add the wrapper to the module's `MODULE["tools"]` list in `samos/modules/<name>/__init__.py`.
+4. If it needs schema, add a migration under `samos/modules/<name>/migrations/`.
+5. Update `docs/tools.md`.
 
 ## Testing
 
@@ -168,6 +173,9 @@ See `.env.example`. Key vars:
 - `TZ` — timezone for cron triggers
 - `SAMOS_CALENDAR_OFFLINE=1` — skip iCloud CalDAV reads/writes
 - `HERMES_HOME` — path to `~/.hermes` for iCloud credentials
+- `EMAIL_IMAP_HOST`, `EMAIL_IMAP_USER`, `EMAIL_IMAP_PASSWORD`, `EMAIL_SMTP_HOST` — enable email tools
+- `OPENWEATHER_API_KEY` — enable weather tools
+- `DEFAULT_WEATHER_LOCATION` — location used by agent context/briefing
 
 ## Common pitfalls
 

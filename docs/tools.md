@@ -85,6 +85,54 @@ The sam-os MCP server exposes these tools. Hermes can call any of them.
 | `away_mode_check(date)` | Check if a date is inside an away range. |
 | `task_note(task_name_or_id, note)` | Attach a note to today's instance of a task. |
 
+## Personal context
+
+| Tool | Description |
+|---|---|
+| `todo_add(text, priority=3, due_date, project_id, tags)` | Add a standalone action item. |
+| `todo_list(status, limit=100)` | List todos. |
+| `todo_today` | Todos due today or overdue. |
+| `note_add(title, body, tags)` | Add a note. |
+| `note_search(query, limit=20)` | Search notes by title/body/tags. |
+| `journal_add(date, entry, mood)` | Add or update a journal entry. |
+| `memory_remember(category, fact, confidence, source)` | Store a fact. |
+| `memory_recall(category, query, limit)` | Recall stored facts. |
+| `project_add(name, description)` | Add a project. |
+| `project_list(status)` | List projects. |
+| `profile_get(key)` | Get a user-profile value. |
+| `profile_set(key, value)` | Set a user-profile value. |
+
+## Email *(env-driven)*
+
+Enabled only when `EMAIL_IMAP_HOST`, `EMAIL_IMAP_USER`, `EMAIL_IMAP_PASSWORD`, and `EMAIL_SMTP_HOST` are set.
+
+| Tool | Description |
+|---|---|
+| `email_unread(limit=10)` | Fetch unread emails from the inbox. |
+| `email_search(query, limit=20)` | Search emails by subject or sender. |
+| `email_read(msg_id)` | Read the full body of a specific email. |
+| `email_send(to, subject, body, html=false)` | Send an email. |
+| `email_daily_digest` | Summary of unread emails. |
+
+## Weather *(env-driven)*
+
+Enabled only when `OPENWEATHER_API_KEY` is set.
+
+| Tool | Description |
+|---|---|
+| `weather_current(location)` | Current conditions for a location. |
+| `weather_forecast_days(location, days=3)` | Multi-day forecast for a location. |
+
+## Agent interface
+
+| Tool | Description |
+|---|---|
+| `agent_context_tool` | Unified snapshot of the current moment (schedule, todos, meals, workouts, notes, email, weather). |
+| `agent_query_tool(target)` | Focused snapshot for a person, project, topic, or entity. |
+| `agent_search_tool(query)` | Cross-module search (todos, notes, memories, projects, schedule, entities). |
+| `agent_briefing_tool` | Concise daily briefing with conflicts, email, and weather when configured. |
+| `agent_remember_tool(fact, entity_type="memory", entity_name)` | Store a fact for the agent in the graph store and memories table. |
+
 ## Setup
 
 | Tool | Description |

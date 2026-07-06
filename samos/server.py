@@ -27,6 +27,8 @@ from .modules.schedule.models import (
 from .modules.system.models import do_backup
 from .registry import REGISTRY
 
+REGISTRY.check_enabled()
+
 
 INSTRUCTIONS = """You are sam-os, a personal operating system.
 

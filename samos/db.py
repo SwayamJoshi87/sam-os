@@ -34,6 +34,13 @@ class ConflictError(SamosError):
         super().__init__(message, "conflict", details)
 
 
+class ExternalError(SamosError):
+    """Raised for failures in external services (email, weather, calendar, etc.)."""
+
+    def __init__(self, message: str, details: dict | None = None):
+        super().__init__(message, "external", details)
+
+
 @contextmanager
 def get_conn():
     """Yield a sqlite3 connection. Commits on success, rolls back on error."""
@@ -64,6 +71,8 @@ def _err(e: Exception):
 def _handle(fn, *args, **kwargs):
     try:
         return _ok(fn(*args, **kwargs))
+    except SamosError as e:
+        return _err(e)
     except Exception as e:
         traceback.print_exc()
         return _err(e)

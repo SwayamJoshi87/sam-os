@@ -1,7 +1,8 @@
 # sam-os
 
-Personal operating system — schedule, gym, and nutrition tracking. Implemented as
-an **MCP server** that Hermes (or any MCP client) launches over stdio.
+Personal operating system — schedule, gym, nutrition, wellness, productivity,
+personal context, email, weather, and agent queries. Implemented as an **MCP
+server** that Hermes (or any MCP client) launches over stdio.
 
 ## What it does
 
@@ -11,7 +12,12 @@ an **MCP server** that Hermes (or any MCP client) launches over stdio.
 - **Meals** — calorie/macro logging with daily target adherence + reusable meal templates
 - **Wellness** — water, sleep, mood, and weight tracking
 - **Productivity** — daily habits, shopping list, away mode, task notes
-- **MCP tools** — Hermes calls `schedule_today`, `gym_log`, `meal_log`, etc.
+- **Personal context** — todos, notes, journal, memories, projects, and user profile
+- **Graph store** — entities, observations, relationships, and events link everything together
+- **Email** — read/send via IMAP/SMTP when configured *(optional)*
+- **Weather** — current conditions and forecast via OpenWeatherMap when configured *(optional)*
+- **Agent interface** — `agent_context_tool`, `agent_query_tool`, `agent_search_tool`, `agent_briefing_tool`, `agent_remember_tool`
+- **MCP tools** — Hermes calls `schedule_today`, `gym_log`, `meal_log`, `agent_briefing_tool`, etc.
 - **Composite state** — `state://today` resource bundles schedule, gym, meals, wellness, habits, and shopping
 - **Internal scheduler** — all cron jobs run inside the server process
 - **Daily backup** to Neon Postgres (3am local time)

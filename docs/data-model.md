@@ -26,6 +26,18 @@ The same schema is mirrored in the Neon Postgres backup target.
 | `task_notes` | Notes attached to today_instances | `id` |
 | `meal_templates` | Reusable meal templates | `id` |
 | `backup_runs` | Backup run history | `id` |
+| `entities` | Graph nodes (people, projects, topics, ...) | `id` |
+| `observations` | Timestamped facts attached to entities | `id` |
+| `relationships` | Typed edges between entities | `id` |
+| `events` | Append-only audit log | `id` |
+| `todos` | Standalone action items | `id` |
+| `notes` | Free-form notes | `id` |
+| `journal` | Dated journal entries | `id` |
+| `memories` | Remembered facts | `id` |
+| `projects` | Projects / workstreams | `id` |
+| `user_profile` | Key/value user preferences | `id` |
+| `email_cache` | Minimal IMAP metadata cache | `id` |
+| `weather_cache` | Recent weather API responses | `id` |
 
 ## Schema
 
@@ -86,9 +98,13 @@ GROUP BY h.name;
 
 ## Schema versioning
 
-Migrations are versioned by filename: `000_base.sql`, `001_today_instances.sql`, `002_nutrition.sql`, `004_gym.sql`, `005_wellness.sql`, `006_productivity.sql`, `007_meal_templates.sql`, `008_backup_status.sql`.
+Migrations come from three places and are applied in order:
 
-New migrations should be added as `00N_*.sql` with N being the next integer.
+1. `scripts/sql/*.sql` — base schema and early features (`000_base.sql`, `001_today_instances.sql`, ...)
+2. `scripts/sql/core/*.sql` — core graph store (`000_graph.sql`)
+3. `samos/modules/<name>/migrations/*.sql` — per-module schema
+
+Module migrations are discovered automatically by `init_db()`, so new modules only need a `migrations/` directory.
 
 All migrations use `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`
 so they're safe to re-run. Schema changes that cannot be expressed idempotently
