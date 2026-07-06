@@ -24,8 +24,13 @@ cd /home/server/sam-os
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-cp .env.example .env
-# edit .env with your SAMOS_DB_HOST_PATH and BACKUP_PG_DSN
+# Optional: one-shot setup (writes Hermes config and seeds a starter template)
+.venv/bin/python scripts/setup.py run --calendar-offline
+
+# Or do it step by step:
+.venv/bin/python scripts/setup.py check
+.venv/bin/python scripts/setup.py hermes --calendar-offline
+.venv/bin/python scripts/setup.py seed
 ```
 
 Tell Hermes to launch the server via `hermes/mcp.json`:

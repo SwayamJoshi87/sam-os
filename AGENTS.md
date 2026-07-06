@@ -9,15 +9,64 @@ as a Python MCP server (`samos/server.py`) that Hermes launches over stdio.
   - `server.py` — MCP server entrypoint; exposes tools/resources and runs APScheduler
   - `schedule.py` — template + today_instances logic, including ad-hoc today editing
   - `gym.py` — workout logging and PR tracking
-  - `meals.py` — meal logging and daily targets
+  - `meals.py` — meal logging, daily targets, and meal templates
   - `calendar.py` — iCloud CalDAV sync + conflict detection
-  - `backup.py` — SQLite → Postgres sync
+  - `backup.py` — SQLite → Postgres sync + backup status tracking
+  - `wellness.py` — water, sleep, mood, and weight tracking
+  - `productivity.py` — habits, shopping list, away mode, task notes
+  - `insights.py` — composite `state://today` and weekly prep summaries
+  - `setup.py` — first-run / agent setup helpers
   - `db.py` — SQLite connection, migrations, and exception types
 - `scripts/` — thin CLI wrappers around `samos.*`
+- `scripts/setup.py` — standalone CLI for setup, config, and credential verification
 - `scripts/sql/*.sql` — idempotent SQLite migrations, applied on server startup
 - `backup/pg_schema.sql` — Postgres target schema
 - `docker/` — Dockerfile and compose file for containerized deployment
 - `hermes/mcp.json` — sample Hermes MCP config
+
+## Agent setup checklist
+
+When setting up sam-os for the first time, run these steps in order:
+
+1. **Create the virtualenv and install dependencies**
+   ```bash
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   ```
+
+2. **Check prerequisites**
+   ```bash
+   .venv/bin/python scripts/setup.py check
+   ```
+   or via MCP: `setup_check_tool()`
+
+3. **Write the Hermes MCP config**
+   ```bash
+   .venv/bin/python scripts/setup.py hermes --calendar-offline
+   ```
+   or via MCP: `setup_write_hermes_config(calendar_offline=true)`
+
+4. **Seed a starter weekly template**
+   ```bash
+   .venv/bin/python scripts/setup.py seed
+   ```
+   or via MCP: `setup_seed_template()`
+
+5. **(Optional) Verify iCloud calendar credentials**
+   ```bash
+   .venv/bin/python scripts/setup.py calendar
+   ```
+   or via MCP: `setup_verify_calendar()`
+
+6. **Run the server**
+   ```bash
+   .venv/bin/python -m samos.server
+   ```
+
+You can also run the full setup in one shot:
+```bash
+.venv/bin/python scripts/setup.py run --calendar-offline
+```
 
 ## How to run
 

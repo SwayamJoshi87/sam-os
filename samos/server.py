@@ -79,6 +79,13 @@ from .schedule import (
     today_date,
     week_history,
 )
+from .setup import (
+    run_setup,
+    seed_template,
+    setup_check,
+    verify_calendar_credentials,
+    write_hermes_config,
+)
 from .wellness import (
     log_mood,
     log_sleep,
@@ -568,6 +575,49 @@ def away_mode_check(date: str | None = None) -> dict:
 def task_note(task_name_or_id: str, note: str) -> dict:
     """Attach a note to today's instance of a task."""
     return _handle(add_task_note, task_name_or_id, note)
+
+
+# ---------------------------------------------------------------------------
+# Setup tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def setup_check_tool() -> dict:
+    """Verify sam-os prerequisites: venv, deps, DB path, credentials, config."""
+    return _handle(setup_check)
+
+
+@mcp.tool()
+def setup_write_hermes_config(
+    output_path: str | None = None,
+    db_path: str | None = None,
+    tz: str | None = None,
+    calendar_offline: bool = False,
+) -> dict:
+    """Generate a Hermes mcp.json config for this installation."""
+    return _handle(write_hermes_config, output_path, db_path, tz, calendar_offline)
+
+
+@mcp.tool()
+def setup_seed_template() -> dict:
+    """Create a minimal starter weekly template if the template is empty."""
+    return _handle(seed_template)
+
+
+@mcp.tool()
+def setup_verify_calendar() -> dict:
+    """Test iCloud CalDAV connectivity and return a clear report."""
+    return _handle(verify_calendar_credentials)
+
+
+@mcp.tool()
+def setup_run(
+    write_hermes: bool = True,
+    seed_template_flag: bool = True,
+    calendar_offline: bool = False,
+) -> dict:
+    """Run full setup: check, write Hermes config, seed template, verify calendar."""
+    return _handle(run_setup, write_hermes, seed_template_flag, calendar_offline)
 
 
 # ---------------------------------------------------------------------------
